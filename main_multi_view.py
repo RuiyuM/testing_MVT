@@ -12,6 +12,14 @@ from torch.utils.data import DataLoader
 sys.dont_write_bytecode = True
 warnings.filterwarnings('ignore')
 
+
+from timm.data import Mixup
+from timm.models import create_model
+from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
+from timm.scheduler import create_scheduler
+from timm.optim import create_optimizer
+from timm.utils import NativeScaler, get_state_dict, ModelEma
+
 import utils as tool
 import parser as parser
 from model.svcnn import SVCNN
@@ -82,8 +90,8 @@ if __name__ == '__main__':
     engine = SingleViewEngine(model_stage1, train_data, None, opt.NUM_CLASSES, opt.GROUPS, optimizer, opt.SV_TYPE, criterion, opt.SV_WEIGHT_PATH, opt.SV_OUTPUT_PATH, device, single_view=False)
 
     # run single view
-    if opt.MV_FLAG == 'TRAIN':
-        engine.train_base(opt.SV_EPOCHS, len(train_dataset))
+    # if opt.MV_FLAG == 'TRAIN':
+    #     engine.train_base(opt.SV_EPOCHS, len(train_dataset))
 
     if opt.MV_FLAG == 'TRAIN':
         cprint('*'*15 + ' Stage 2 ' + '*'*15, 'yellow')
@@ -102,6 +110,22 @@ if __name__ == '__main__':
         model_stage2 = MVFN(model_stage1, opt.FEATURE_DIM).to(device)
     elif opt.MV_TYPE == 'SMVCNN':
         model_stage2 = SMVCNN(model_stage1, opt.FEATURE_DIM, opt.SMVCNN_D, use_embed=opt.SMVCNN_USE_EMBED).to(device)
+    elif opt.MV_TYPE == 'MVT':
+        model_stage2 = create_model(
+            'vit_small_patch16_224',
+            pretrained=False,
+            num_classes=opt.NUM_CLASSES,
+            drop_rate=0.0,
+            drop_path_rate=0.1,
+            drop_block_rate=None,
+        )
+        model_stage2.to('cuda')
+        model_ema = ModelEma(
+            model_stage2,
+            decay=0.99996,
+            device='',
+            resume='')
+
 
     if opt.MV_FLAG in ['TEST', 'CM']:
         model_stage2.load_state_dict(torch.load(opt.MV_TEST_WEIGHT, map_location=device))
@@ -135,7 +159,7 @@ if __name__ == '__main__':
 
     # run multi-view
     if opt.MV_FLAG == 'TRAIN':
-        if opt.MV_TYPE in ['MVCNN_NEW', 'GVCNN', 'DAN', 'MVFN', 'SMVCNN']:
+        if opt.MV_TYPE in ['MVCNN_NEW', 'GVCNN', 'DAN', 'MVFN', 'SMVCNN', 'MVT']:
             engine.train_base(opt.MV_EPOCHS)
         elif opt.MV_TYPE == 'CVR':
             vert = tool.get_vert(opt.CVR_K)

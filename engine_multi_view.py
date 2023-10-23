@@ -46,7 +46,7 @@ class MultiViewEngine(object):
                 self.optimizer.zero_grad()
                 B, V, C, H, W = inputs.shape
                 inputs = inputs.view(-1, C, H, W)
-                outputs, features = self.model(B, V, num_views, inputs)
+                outputs = self.model(inputs)
                 loss = self.criterion(outputs, targets)
                 total_loss += loss.item()
                 loss.backward()
@@ -56,11 +56,12 @@ class MultiViewEngine(object):
             print(script)
 
             # evaluation
-            with torch.no_grad():
-                overall_accuracy = self.valid()
+            if epoch == epochs - 1:
+                with torch.no_grad():
+                    overall_accuracy = self.valid()
 
             # save best model
-            self.save_model_weights(epoch, overall_accuracy)
+            # self.save_model_weights(epoch, overall_accuracy)
 
             # get remaining time
             current_time = time.time()
@@ -68,41 +69,41 @@ class MultiViewEngine(object):
             previous_time = current_time
             print('Remaining Time:', time_left)
 
-    def train_cvr(self, epochs, vert, weight_factor, norm_eps):
-        self.model.train()
-        previous_time = time.time()
-        vert = torch.Tensor(vert).to(self.device)
-        for epoch in range(self.start_epoch, epochs):
-            total_loss = 0
-            for index, (label, image, num_views, marks) in enumerate(self.train_data):
-                self.scheduler.step(len(self.train_data)*epoch + index)
-                inputs = Variable(image).to(self.device)
-                targets = Variable(label).to(self.device)
-                self.optimizer.zero_grad()
-                B, V, C, H, W = inputs.shape
-                inputs = inputs.view(-1, C, H, W)
-                outputs, features, pos = self.model(B, V, num_views, inputs)
-                pos_loss = torch.norm(tool.normalize(vert, norm_eps) - tool.normalize(pos, norm_eps), p=2, dim=-1).mean()
-                loss = self.criterion(outputs, targets) + weight_factor * pos_loss
-                total_loss += loss.item()
-                loss.backward()
-                self.optimizer.step()
-
-            script = ('Epoch:[ %d | %d ]    Loss: %.4f    ') % (epoch + 1, epochs, total_loss)
-            print(script)
-
-            # evaluation
-            with torch.no_grad():
-                overall_accuracy = self.valid()
-
-            # save best model
-            self.save_model_weights(epoch, overall_accuracy)
-
-            # get remaining time
-            current_time = time.time()
-            time_left = datetime.timedelta(seconds=(current_time - previous_time)*(epochs - epoch - 1))
-            previous_time = current_time
-            print('Remaining Time:', time_left)
+    # def train_cvr(self, epochs, vert, weight_factor, norm_eps):
+    #     self.model.train()
+    #     previous_time = time.time()
+    #     vert = torch.Tensor(vert).to(self.device)
+    #     for epoch in range(self.start_epoch, epochs):
+    #         total_loss = 0
+    #         for index, (label, image, num_views, marks) in enumerate(self.train_data):
+    #             self.scheduler.step(len(self.train_data)*epoch + index)
+    #             inputs = Variable(image).to(self.device)
+    #             targets = Variable(label).to(self.device)
+    #             self.optimizer.zero_grad()
+    #             B, V, C, H, W = inputs.shape
+    #             inputs = inputs.view(-1, C, H, W)
+    #             outputs = self.model(inputs)
+    #             pos_loss = torch.norm(tool.normalize(vert, norm_eps) - tool.normalize(pos, norm_eps), p=2, dim=-1).mean()
+    #             loss = self.criterion(outputs, targets) + weight_factor * pos_loss
+    #             total_loss += loss.item()
+    #             loss.backward()
+    #             self.optimizer.step()
+    #
+    #         script = ('Epoch:[ %d | %d ]    Loss: %.4f    ') % (epoch + 1, epochs, total_loss)
+    #         print(script)
+    #
+    #         # evaluation
+    #         with torch.no_grad():
+    #             overall_accuracy = self.valid()
+    #
+    #         # save best model
+    #         self.save_model_weights(epoch, overall_accuracy)
+    #
+    #         # get remaining time
+    #         current_time = time.time()
+    #         time_left = datetime.timedelta(seconds=(current_time - previous_time)*(epochs - epoch - 1))
+    #         previous_time = current_time
+    #         print('Remaining Time:', time_left)
 
     def valid(self):
         all_correct_points = 0
@@ -115,7 +116,7 @@ class MultiViewEngine(object):
                 targets = Variable(label).to(self.device)
                 B, V, C, H, W = inputs.shape
                 inputs = inputs.view(-1, C, H, W)
-                outputs, features = self.model(B, V, num_views, inputs)
+                outputs = self.model(inputs)
                 prediction = torch.max(outputs, 1)[1]
                 transform_targets = torch.max(targets, 1)[1]
                 results = (prediction == transform_targets)
